@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/neosouler7/bitGoin/explorer"
 	"github.com/neosouler7/bitGoin/rest"
@@ -14,7 +15,7 @@ func usage() {
 	fmt.Printf("Please use the following commands:\n\n")
 	fmt.Printf("-port:    Set the PORT of the server\n")
 	fmt.Printf("-mode:    Choose between 'html' and 'rest'\n")
-	os.Exit(1)
+	runtime.Goexit() // everything finishes but allowes defer
 }
 
 func Start() {
