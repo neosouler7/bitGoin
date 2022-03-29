@@ -20,7 +20,7 @@ const (
 )
 
 func Close() {
-	DB().Close()
+	utils.HandleErr(DB().Close())
 }
 
 func DB() *bolt.DB {
