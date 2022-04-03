@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/neosouler7/bitGoin/utils"
+	"github.com/neosouler7/bitGoin/wallet"
 )
 
 const (
@@ -12,7 +13,9 @@ const (
 )
 
 var (
-	Mempool *mempool = &mempool{}
+	Mempool       *mempool = &mempool{}
+	ErrorNoMoney           = errors.New("not enough money")
+	ErrorNotValid          = errors.New("Tx Invalid")
 )
 
 type mempool struct {
@@ -26,19 +29,15 @@ type Tx struct {
 	TxOuts    []*TxOut `json:"txOuts"`
 }
 
-func (t *Tx) getId() {
-	t.Id = utils.Hash(t)
-}
-
 type TxIn struct {
-	TxId  string `json:"txId"`
-	Index int    `json:"index"`
-	Owner string `json:"owner"`
+	TxId      string `json:"txId"`
+	Index     int    `json:"index"`
+	Signature string `json:"signature"`
 }
 
 type TxOut struct {
-	Owner  string `json:"owner"`
-	Amount int    `json:"amount"`
+	Address string `json:"address"`
+	Amount  int    `json:"amount"`
 }
 
 type UTxOut struct {
@@ -50,15 +49,15 @@ type UTxOut struct {
 func makeCoinbaseTx(address string) *Tx {
 	txIns := []*TxIn{
 		{
-			TxId:  "",
-			Index: -1,
-			Owner: "COINBASE",
+			TxId:      "",
+			Index:     -1,
+			Signature: "COINBASE",
 		},
 	}
 	txOuts := []*TxOut{
 		{
-			Owner:  address,
-			Amount: minerReward,
+			Address: address,
+			Amount:  minerReward,
 		},
 	}
 	tx := Tx{
@@ -73,7 +72,7 @@ func makeCoinbaseTx(address string) *Tx {
 
 func makeTx(from, to string, amount int) (*Tx, error) {
 	if BalanceByAddress(from, Blockchain()) < amount {
-		return nil, errors.New("not enough money")
+		return nil, ErrorNoMoney
 	}
 
 	var txIns []*TxIn
@@ -102,11 +101,16 @@ func makeTx(from, to string, amount int) (*Tx, error) {
 		TxOuts:    txOuts,
 	}
 	tx.getId()
+	tx.sign()
+	valid := validate(tx)
+	if !valid {
+		return nil, ErrorNotValid
+	}
 	return tx, nil
 }
 
 func (m *mempool) AddTx(to string, amount int) error {
-	tx, err := makeTx("jh", to, amount)
+	tx, err := makeTx(wallet.Wallet().Address, to, amount)
 	if err != nil {
 		return err
 	}
@@ -115,11 +119,38 @@ func (m *mempool) AddTx(to string, amount int) error {
 }
 
 func (m *mempool) txToConfirm() []*Tx {
-	coinbase := makeCoinbaseTx("jh")
+	coinbase := makeCoinbaseTx(wallet.Wallet().Address)
 	txs := m.Txs
 	txs = append(txs, coinbase)
 	m.Txs = nil
 	return txs
+}
+
+func (t *Tx) getId() {
+	t.Id = utils.Hash(t)
+}
+
+func (t *Tx) sign() {
+	for _, txIn := range t.TxIns {
+		txIn.Signature = wallet.Sign(t.Id, wallet.Wallet())
+	}
+}
+
+func validate(tx *Tx) bool {
+	valid := true
+	for _, txIn := range tx.TxIns {
+		prevTx := FindTx(Blockchain(), txIn.TxId)
+		if prevTx == nil {
+			valid = false
+			break
+		}
+		address := prevTx.TxOuts[txIn.Index].Address
+		valid = wallet.Verify(txIn.Signature, tx.Id, address)
+		if !valid {
+			break
+		}
+	}
+	return valid
 }
 
 func isOnMempool(uTxOut *UTxOut) bool {

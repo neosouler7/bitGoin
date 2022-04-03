@@ -1,6 +1,7 @@
 .vscode
 *.http
 *.db
+*.wallet
 
 # Binaries for programs and plugins
 *.exe

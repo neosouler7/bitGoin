@@ -11,4 +11,7 @@ func main() {
 
 	blockchain.Blockchain()
 	cli.Start()
+
+	// w := wallet.Wallet()
+	// fmt.Println(w)
 }

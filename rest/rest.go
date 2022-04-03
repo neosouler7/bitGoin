@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/neosouler7/bitGoin/blockchain"
 	"github.com/neosouler7/bitGoin/utils"
+	"github.com/neosouler7/bitGoin/wallet"
 )
 
 var port string
@@ -74,6 +75,11 @@ func documentation(rw http.ResponseWriter, r *http.Request) {
 			Method:      "GET",
 			Description: "Check current memory pool",
 		},
+		{
+			URL:         url("/wallet"),
+			Method:      "GET",
+			Description: "Check my wallet address",
+		},
 	}
 	err := json.NewEncoder(rw).Encode(data) // replace Marshalling & return to writer
 	utils.HandleErr(err)
@@ -134,6 +140,16 @@ func mempool(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func myWallet(rw http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		address := wallet.Wallet().Address
+		utils.HandleErr(json.NewEncoder(rw).Encode(struct {
+			Address string `json:"address"`
+		}{Address: address}))
+	}
+}
+
 func transactions(rw http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
@@ -141,7 +157,9 @@ func transactions(rw http.ResponseWriter, r *http.Request) {
 		utils.HandleErr(json.NewDecoder(r.Body).Decode(&payload))
 		err := blockchain.Mempool.AddTx(payload.To, payload.Amount)
 		if err != nil {
-			utils.HandleErr(json.NewEncoder(rw).Encode(errorResponse{"not enough funds"}))
+			rw.WriteHeader(http.StatusBadRequest)
+			utils.HandleErr(json.NewEncoder(rw).Encode(errorResponse{err.Error()}))
+			return
 		}
 		rw.WriteHeader(http.StatusCreated)
 	}
@@ -164,6 +182,7 @@ func Start(aPort int) {
 	router.HandleFunc("/blocks/{hash:[a-f0-9]+}", block).Methods("GET")
 	router.HandleFunc("/balance/{address}", balance).Methods("GET")
 	router.HandleFunc("/mempool", mempool).Methods("GET")
+	router.HandleFunc("/wallet", myWallet).Methods("GET")
 	router.HandleFunc("/transactions", transactions).Methods("POST")
 	fmt.Printf("Listening on http://localhost%s\n", port)
 	log.Fatal(http.ListenAndServe(port, router))
