@@ -1,10 +1,12 @@
 package db
 
 import (
+	"fmt"
+	"os"
 	"sync"
 
-	"github.com/boltdb/bolt"
 	"github.com/neosouler7/bitGoin/utils"
+	bolt "go.etcd.io/bbolt"
 )
 
 var (
@@ -13,11 +15,16 @@ var (
 )
 
 const (
-	dbName       = "blockchain.db"
+	dbName       = "blockchain"
 	dataBucket   = "data"
 	blocksBucket = "blocks"
 	checkpoint   = "checkpoint"
 )
+
+func getDbName() string {
+	port := os.Args[2][6:]
+	return fmt.Sprintf("%s_%s.db", dbName, port)
+}
 
 func Close() {
 	utils.HandleErr(DB().Close())
@@ -26,7 +33,7 @@ func Close() {
 func DB() *bolt.DB {
 	if db == nil {
 		once.Do(func() {
-			dbPointer, err := bolt.Open(dbName, 0600, nil)
+			dbPointer, err := bolt.Open(getDbName(), 0600, nil)
 			db = dbPointer
 			utils.HandleErr(err)
 
@@ -80,4 +87,14 @@ func Block(hash string) []byte {
 	})
 	utils.HandleErr(err)
 	return data
+}
+
+func EmptyBlocks() {
+	err := DB().Update(func(tx *bolt.Tx) error {
+		utils.HandleErr(tx.DeleteBucket([]byte(blocksBucket)))
+		_, err := tx.CreateBucket([]byte(blocksBucket))
+		utils.HandleErr(err)
+		return nil
+	})
+	utils.HandleErr(err)
 }
