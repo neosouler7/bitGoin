@@ -2,6 +2,7 @@
 *.http
 *.db
 *.wallet
+*.out
 
 # Binaries for programs and plugins
 *.exe

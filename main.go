@@ -13,5 +13,6 @@ import (
 // 4. buffered channels
 func main() {
 	defer db.Close()
+	db.InitDB()
 	cli.Start()
 }

@@ -7,11 +7,35 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"math/big"
 	"os"
 
 	"github.com/neosouler7/bitGoin/utils"
 )
+
+type fileLayer interface {
+	hasWalletFile() bool
+	writeFile(name string, data []byte, perm fs.FileMode) error
+	readFile(name string) ([]byte, error)
+}
+
+type layer struct{}
+
+func (layer) hasWalletFile() bool {
+	_, err := os.Stat(walletFileName)
+	return !os.IsNotExist(err)
+}
+
+func (layer) writeFile(name string, data []byte, perm fs.FileMode) error {
+	return os.WriteFile(name, data, perm)
+}
+
+func (layer) readFile(name string) ([]byte, error) {
+	return os.ReadFile(name)
+}
+
+var files fileLayer = layer{}
 
 type wallet struct {
 	privateKey *ecdsa.PrivateKey // we sign with 'private', and verify with 'public'
@@ -22,11 +46,6 @@ const walletFileName string = "bitGoin.wallet"
 
 var w *wallet
 
-func hasWalletFile() bool {
-	_, err := os.Stat(walletFileName)
-	return !os.IsNotExist(err)
-}
-
 func createPrivKey() *ecdsa.PrivateKey {
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	utils.HandleErr(err)
@@ -36,12 +55,12 @@ func createPrivKey() *ecdsa.PrivateKey {
 func persistKey(key *ecdsa.PrivateKey) {
 	bytes, err := x509.MarshalECPrivateKey(key)
 	utils.HandleErr(err)
-	err = os.WriteFile(walletFileName, bytes, 0644)
+	err = files.writeFile(walletFileName, bytes, 0644)
 	utils.HandleErr(err)
 }
 
 func restoreKey() (key *ecdsa.PrivateKey) { // we call this 'named return'
-	keyAsBytes, err := os.ReadFile(walletFileName)
+	keyAsBytes, err := files.readFile(walletFileName)
 	utils.HandleErr(err)
 	key, err = x509.ParseECPrivateKey(keyAsBytes)
 	utils.HandleErr(err)
@@ -99,7 +118,7 @@ func Verify(signature, payload, address string) bool {
 func Wallet() *wallet {
 	if w == nil {
 		w = &wallet{}
-		if hasWalletFile() {
+		if files.hasWalletFile() {
 			w.privateKey = restoreKey() // restore key from file
 		} else {
 			key := createPrivKey() // create key & save to file
